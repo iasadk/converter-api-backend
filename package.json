@@ -10,11 +10,15 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "@ffprobe-installer/ffprobe": "^1.4.1",
     "dotenv": "^16.0.3",
     "express": "^4.18.2",
     "express-fileupload": "^1.4.0",
+    "fluent-ffmpeg": "^2.1.2",
     "gtts": "^0.2.1",
     "jsonwebtoken": "^8.5.1",
-    "nodemon": "^2.0.20"
+    "nodemon": "^2.0.20",
+    "videoshow": "^0.1.12"
   }
 }

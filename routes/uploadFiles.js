@@ -4,6 +4,8 @@ const authMiddleware = require('../middleware/authMiddleware')
 const fs = require('fs');
 const path = require('path')
 const gTTS = require('gtts');
+const videoshow = require('videoshow')
+const { exec } = require('child_process');
 
 // Route to upload single file (.png, .jpg, .jpeg, .mp4)
 router.post("/upload_file", authMiddleware, (req, res) => {
@@ -41,7 +43,7 @@ router.post("/upload_file", authMiddleware, (req, res) => {
     }
 
 })
-
+// Route to get all the file of particular storage.
 router.get("/my_upload_file", authMiddleware, (req, res) => {
     let { username } = req.user;
     let cwd = process.cwd();
@@ -53,7 +55,7 @@ router.get("/my_upload_file", authMiddleware, (req, res) => {
         return res.json({ status: "ok", data: files })
     })
 })
-
+// Route to convert text file to audio: 
 router.post("/text_file_to_audio", authMiddleware, (req, res) => {
     let { file_path } = req.body;
     // getting file name from given filePath
@@ -70,7 +72,7 @@ router.post("/text_file_to_audio", authMiddleware, (req, res) => {
         let foundedFile = data.filter(f => {
             return f === file_name
         })
-        if (foundedFile.length > 0 && file_name.split('.')[1]=="txt") {
+        if (foundedFile.length > 0 && file_name.split('.')[1] == "txt") {
             fs.readFile(path.resolve(cwd, process.env.ROOT_UPLOAD_PATH, username, file_name), 'utf8', function (err, data) {
                 console.log("error:", err)
                 if (err) {
@@ -101,4 +103,160 @@ router.post("/text_file_to_audio", authMiddleware, (req, res) => {
     });
 
 })
+
+// Route to merge image and audio : 
+router.post("/merge_image_and_audio", authMiddleware, (req, res) => {
+    const { image_file_path, audio_file_path } = req.body;
+    let imageName = image_file_path.split('/')[2];
+    let audioName = audio_file_path.split('/')[2];
+    let { username } = req.user;
+    let cwd = process.cwd();
+    fs.readdir(path.resolve(cwd, process.env.ROOT_UPLOAD_PATH, username), (err, files) => {
+        let imageFile = [];
+        let audioFile = [];
+
+        imageFile = files.filter(file => file === imageName);
+        audioFile = files.filter(file => file === audioName);
+        if (imageFile.length == 0) {
+            return res.json({ error: "No such image file exist in your storage." })
+        }
+        else if (audioFile.length == 0) {
+            return res.json({ error: "No such audio file exist in your storage." })
+        }
+        // If both img and audio file existing in user storage then merge both the files
+        var images = [
+            { path: path.resolve(cwd, 'public', 'uploads', 'Asad', imageFile[0]) },
+        ]
+
+        var videoOptions = {
+            fps: 25,
+            loop: 20, // seconds
+            transition: true,
+            // transitionDuration: 5, // seconds
+            videoBitrate: 1024,
+            videoCodec: 'libx264',
+            size: '640x?',
+            audioBitrate: '128k',
+            audioChannels: 2,
+            format: 'mp4',
+            pixelFormat: 'yuv420p'
+        }
+        imageName = imageName.split('.')[0];
+        audioName = audioName.split('.')[0];
+        const saveFileName = `${imageName}_${audioName}_${Date.now()}.mp4`
+        let saveVideoFilePath = path.resolve(cwd, 'public', 'uploads', username, saveFileName)
+        videoshow(images, videoOptions)
+            .audio(path.resolve(cwd, 'public', 'uploads', username, audioFile[0]))
+            .save(saveVideoFilePath)
+            .on('start', function (command) {
+                // console.log('ffmpeg process started:', command)
+            })
+            .on('error', function (err, stdout, stderr) {
+                return res.json({ error: err, ffmpeg_stderr: stderr })
+                // console.error('Error:', err)
+                // console.error('ffmpeg stderr:', stderr)
+            })
+            .on('end', function (output) {
+                // console.error('Video created in:', output)
+                return res.json({
+                    status: "ok",
+                    "message": "Video Created Successfully",
+                    "video_file_path": `public/upload/${username}/${saveFileName}`
+                })
+            })
+        // res.send({imageFile,audioFile})
+    })
+    // res.send({ imageName, audioName })
+})
+
+// Route to replace audio from an uploaded video file : 
+router.post('/merge_video_and_audio', authMiddleware, (req, res) => {
+    const { video_file_path, audio_file_path } = req.body;
+    let videoName = video_file_path.split('/')[2];
+    let audioName = audio_file_path.split('/')[2];
+    let { username } = req.user;
+    let cwd = process.cwd();
+    fs.readdir(path.resolve(cwd, process.env.ROOT_UPLOAD_PATH, username), (err, files) => {
+        let videoFile = [];
+        let audioFile = [];
+
+        videoFile = files.filter(file => file === videoName);
+        audioFile = files.filter(file => file === audioName);
+        if (videoFile.length == 0) {
+            return res.json({ error: "No such video file exist in your storage." })
+        }
+        else if (audioFile.length == 0) {
+            return res.json({ error: "No such audio file exist in your storage." })
+        }
+        let videoFilePath = path.resolve('public', 'uploads', username, videoName)
+        let audioFilePath = path.resolve('public', 'uploads', username, audioName)
+        // console.log(path.resolve('public', 'uploads', username, audioName))
+
+        videoName = videoName.split('.')[0];
+        audioName = audioName.split('.')[0];
+        const saveFileName = `${videoName}_${audioName}_${Date.now()}.mp4`
+        let saveVideoFilePath = path.resolve(cwd, 'public', 'uploads', username, saveFileName)
+        // console.log(__dirname)
+        exec(`ffmpeg -i "${videoFilePath}"  -stream_loop -1 -i "${audioFilePath}" -map 0:v -map 1:a -c copy -shortest "${saveVideoFilePath}"`, (err, stderr, setdout) => {
+            if (err) {
+                return res.json({ error: err, ffmpeg_stderr: stderr })
+
+            }
+            else {
+                return res.json({
+                    "status": "ok",
+                    "message": "Video and Audio Merged Successfully",
+                    "video_file_path": saveVideoFilePath
+
+                })
+            }
+        })
+    })
+})
+
+// Router to merge multiple videos from user storage: 
+router.post('/merge_all_video', authMiddleware, (req, res) => {
+    const { path_list } = req.body;
+    let cwd = process.cwd();
+    let { username } = req.user;
+    // first check that all the file have .mp4 extention and while checking add their name to temp.txt file:
+    let tempTextFilePath = path.resolve(cwd, process.env.ROOT_UPLOAD_PATH, username);
+    let tempFile = path.join(tempTextFilePath, 'temp.txt');
+    path_list.forEach(path => {
+        let fileName = path.split('/')[2];
+        let fileExt = fileName.split('.')[1];
+        let data = `file '${fileName}'\n`
+
+        fs.appendFile(tempFile, data, (err) => {
+            if (err) return res.json({ error: err })
+        })
+        if (fileExt != "mp4") {
+            fs.unlink(tempFile, (err) => {
+                if (err) return res.json({ error: err })
+            })
+            return res.json({ error: `file: ${fileName} is not an .mp4 file. Only .mp4 file are allowed.` })
+        }
+    })
+    let outputFileName = `mergeVideos-${Date.now()}.mp4`
+    let outputFilePath = path.resolve(cwd, process.env.ROOT_UPLOAD_PATH, username, outputFileName);
+    exec(`ffmpeg -f concat -i "${tempFile}" -c copy "${outputFilePath}"`, (err) => {
+        if (err) return res.json({ error: err, ffmpeg_stderr: stderr });
+        else {
+            // After mergin all the videos delete the temp.txt file : 
+            fs.unlink(tempFile, (err) => {
+                if (err) return res.json({ error: err })
+            })
+            return res.json({
+                "status": "ok",
+                "message": "Merged All Video Successfully",
+                "video_file_path": outputFilePath
+            })
+
+        }
+    })
+
+
+
+})
+
 module.exports = router
