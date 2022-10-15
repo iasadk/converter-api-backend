@@ -1,0 +1,9 @@
+Web Dev related niche:-
+-designing
+-developing:
+	-Wordpress
+	-Frontend
+	-backend(Nodejs,php,python,djnago etc)
+	-Ecommerce
+	-Reactjs,Tailwind etc
+	-
