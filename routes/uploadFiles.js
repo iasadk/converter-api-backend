@@ -259,4 +259,29 @@ router.post('/merge_all_video', authMiddleware, (req, res) => {
 
 })
 
+
+// route to download a file: 
+router.get('/download_file', authMiddleware, (req, res) => {
+    const { file_path } = req.query;
+    const { username } = req.user
+    let fileName = file_path.split('/')[2];
+    let cwd = process.cwd();
+    // check if file exist or not: 
+    // console.log(fileName)
+    fs.readdir(path.resolve(cwd, process.env.ROOT_UPLOAD_PATH, username), (err, files) => {
+        let isFile = [];
+        isFile = files.filter((f) => {
+            return f === fileName
+        })
+        if (isFile.length === 0) {
+            return res.json({ error: `${fileName} no exist in your storage.` })
+
+        }
+    })
+
+    let downloadPath = path.resolve(cwd, process.env.ROOT_UPLOAD_PATH, username, fileName)
+    return res.download(downloadPath);
+
+    // console.log(fileName)
+})
 module.exports = router
